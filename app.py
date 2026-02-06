@@ -18,8 +18,10 @@ SUPABASE_KEY = "TU_SUPABASE_ANON_KEY"  # Lo obtenés de tu proyecto en Supabase
 
 # Inicializar cliente Supabase
 @st.cache_resource
-def get_supabase_client():
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+def get_supabase_client() -> Client:
+    url = st.secrets["SUPABASE_URL"]
+    key = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
 
 supabase: Client = get_supabase_client()
 
