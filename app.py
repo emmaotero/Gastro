@@ -339,8 +339,165 @@ def mostrar_pedidos():
 def mostrar_productos():
     """Gestión de productos y recetas"""
     st.title("🍪 Productos y Recetas")
-    st.info("🚧 En desarrollo")
-    # TODO: Implementar CRUD de productos y recetas
+    
+    user_id = st.session_state.get('user_id')
+    
+    # Tabs para organizar
+    tab1, tab2 = st.tabs(["📋 Mis Productos", "➕ Crear Producto"])
+    
+    with tab1:
+        # Mostrar lista de productos
+        st.subheader("Productos Registrados")
+        
+        try:
+            response = supabase.table('productos').select('*').eq('user_id', user_id).eq('activo', True).execute()
+            
+            if response.data:
+                for producto in response.data:
+                    with st.expander(f"🍰 {producto['nombre']}"):
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.write(f"**Tipo:** {producto.get('tipo', 'N/A')}")
+                            st.write(f"**Precio de venta:** ${producto.get('precio_venta', 0):,.2f}")
+                            st.write(f"**Costo embalaje:** ${producto.get('costo_embalaje', 0):,.2f}")
+                        
+                        with col2:
+                            # Obtener receta
+                            receta_response = supabase.table('recetas').select('*').eq('producto_id', producto['id']).execute()
+                            
+                            if receta_response.data:
+                                st.write("**Ingredientes:**")
+                                for ingrediente in receta_response.data:
+                                    st.write(f"- {ingrediente['ingrediente_nombre']}: {ingrediente['cantidad']} {ingrediente['unidad']}")
+                                
+                                # Calcular costo
+                                costo_total = 0
+                                for ing in receta_response.data:
+                                    # Buscar costo del ingrediente
+                                    ing_data = supabase.table('ingredientes').select('costo_unitario').eq('user_id', user_id).eq('nombre', ing['ingrediente_nombre']).execute()
+                                    if ing_data.data:
+                                        costo_unitario = ing_data.data[0].get('costo_unitario', 0)
+                                        costo_total += ing['cantidad'] * costo_unitario
+                                
+                                costo_total += producto.get('costo_embalaje', 0)
+                                precio_venta = producto.get('precio_venta', 0)
+                                margen = precio_venta - costo_total if precio_venta > 0 else 0
+                                margen_pct = (margen / precio_venta * 100) if precio_venta > 0 else 0
+                                
+                                st.write("---")
+                                st.write(f"💰 **Costo producción:** ${costo_total:,.2f}")
+                                st.write(f"💵 **Precio venta:** ${precio_venta:,.2f}")
+                                st.write(f"📈 **Margen:** ${margen:,.2f} ({margen_pct:.1f}%)")
+                        
+                        # Botón para eliminar
+                        if st.button(f"🗑️ Eliminar {producto['nombre']}", key=f"del_{producto['id']}"):
+                            supabase.table('productos').delete().eq('id', producto['id']).execute()
+                            st.success(f"Producto {producto['nombre']} eliminado")
+                            st.rerun()
+            else:
+                st.info("No tenés productos registrados. ¡Creá el primero en la pestaña de al lado!")
+        
+        except Exception as e:
+            st.error(f"Error al cargar productos: {str(e)}")
+    
+    with tab2:
+        # Formulario para crear producto
+        st.subheader("Crear Nuevo Producto")
+        
+        with st.form("nuevo_producto"):
+            nombre = st.text_input("Nombre del Producto*", placeholder="Ej: Alfajor de Chocolate")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                tipo = st.text_input("Tipo", placeholder="Ej: alfajor, tarta, brownie")
+                precio_venta = st.number_input("Precio de Venta", min_value=0.0, step=10.0)
+            
+            with col2:
+                costo_embalaje = st.number_input("Costo de Embalaje", min_value=0.0, step=1.0)
+                descripcion = st.text_area("Descripción (opcional)")
+            
+            st.write("---")
+            st.subheader("Ingredientes de la Receta")
+            
+            # Obtener lista de ingredientes disponibles
+            try:
+                ingredientes_disponibles = supabase.table('ingredientes').select('nombre, unidad').eq('user_id', user_id).execute()
+                lista_ingredientes = [f"{ing['nombre']} ({ing['unidad']})" for ing in ingredientes_disponibles.data] if ingredientes_disponibles.data else []
+            except:
+                lista_ingredientes = []
+            
+            # Permitir agregar múltiples ingredientes
+            num_ingredientes = st.number_input("¿Cuántos ingredientes tiene?", min_value=1, max_value=20, value=3, step=1)
+            
+            ingredientes_receta = []
+            for i in range(int(num_ingredientes)):
+                st.write(f"**Ingrediente {i+1}:**")
+                col1, col2, col3 = st.columns([3, 1, 1])
+                
+                with col1:
+                    if lista_ingredientes:
+                        ing_seleccionado = st.selectbox(
+                            "Ingrediente", 
+                            lista_ingredientes, 
+                            key=f"ing_{i}",
+                            label_visibility="collapsed"
+                        )
+                        nombre_ing = ing_seleccionado.split(" (")[0]  # Extraer solo el nombre
+                    else:
+                        nombre_ing = st.text_input("Nombre ingrediente", key=f"ing_nombre_{i}", label_visibility="collapsed")
+                
+                with col2:
+                    cantidad = st.number_input("Cantidad", min_value=0.0, step=0.1, key=f"cant_{i}", label_visibility="collapsed")
+                
+                with col3:
+                    unidad = st.selectbox("Unidad", ["gr", "kg", "un", "ml", "l"], key=f"unidad_{i}", label_visibility="collapsed")
+                
+                if cantidad > 0:
+                    ingredientes_receta.append({
+                        'nombre': nombre_ing,
+                        'cantidad': cantidad,
+                        'unidad': unidad
+                    })
+            
+            submitted = st.form_submit_button("✅ Crear Producto", type="primary")
+            
+            if submitted:
+                if not nombre:
+                    st.error("El nombre del producto es obligatorio")
+                elif not ingredientes_receta:
+                    st.error("Debés agregar al menos un ingrediente")
+                else:
+                    try:
+                        # Crear producto
+                        producto_data = {
+                            'user_id': user_id,
+                            'nombre': nombre,
+                            'tipo': tipo if tipo else None,
+                            'descripcion': descripcion if descripcion else None,
+                            'precio_venta': precio_venta,
+                            'costo_embalaje': costo_embalaje,
+                            'activo': True
+                        }
+                        
+                        response = supabase.table('productos').insert(producto_data).execute()
+                        producto_id = response.data[0]['id']
+                        
+                        # Crear recetas
+                        for ing in ingredientes_receta:
+                            receta_data = {
+                                'producto_id': producto_id,
+                                'ingrediente_nombre': ing['nombre'],
+                                'cantidad': ing['cantidad'],
+                                'unidad': ing['unidad']
+                            }
+                            supabase.table('recetas').insert(receta_data).execute()
+                        
+                        st.success(f"✅ Producto '{nombre}' creado exitosamente con {len(ingredientes_receta)} ingredientes!")
+                        st.rerun()
+                    
+                    except Exception as e:
+                        st.error(f"Error al crear producto: {str(e)}")
 
 def mostrar_finanzas():
     """Análisis financiero"""
