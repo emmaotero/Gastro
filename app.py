@@ -206,6 +206,64 @@ def registrar_pedido(user_id, fecha, producto, cantidad, tipo):
     except Exception as e:
         return False, f"Error: {str(e)}"
 
+def registrar_compra(user_id, fecha, ingrediente, cantidad, unidad, total, costo_unitario, proveedor):
+    """Registra una compra Y actualiza el stock + precio UEPS"""
+    try:
+        # 1. Registrar la compra en historial
+        compra_data = {
+            'user_id': user_id,
+            'fecha': fecha.strftime('%Y-%m-%d'),
+            'ingrediente': ingrediente,
+            'cantidad': cantidad,
+            'unidad': unidad,
+            'total': total,
+            'costo_unitario': costo_unitario,
+            'proveedor': proveedor
+        }
+        supabase.table('compras').insert(compra_data).execute()
+        
+        # 2. Actualizar stock del ingrediente
+        # Buscar si el ingrediente existe
+        ing_response = supabase.table('ingredientes').select('*').eq('user_id', user_id).eq('nombre', ingrediente).execute()
+        
+        if ing_response.data:
+            # Existe → actualizar
+            ing_actual = ing_response.data[0]
+            nuevo_stock = ing_actual['stock_actual'] + cantidad
+            nuevo_comprado = ing_actual['comprado'] + cantidad
+            
+            supabase.table('ingredientes').update({
+                'stock_actual': nuevo_stock,
+                'comprado': nuevo_comprado,
+                'costo_unitario': costo_unitario,  # UEPS: último precio
+                'precio_compra': total,
+                'cantidad_compra': cantidad
+            }).eq('id', ing_actual['id']).execute()
+        else:
+            # No existe → crear
+            supabase.table('ingredientes').insert({
+                'user_id': user_id,
+                'nombre': ingrediente,
+                'unidad': unidad,
+                'stock_actual': cantidad,
+                'comprado': cantidad,
+                'consumido': 0,
+                'costo_unitario': costo_unitario,
+                'precio_compra': total,
+                'cantidad_compra': cantidad
+            }).execute()
+        
+        return True, "Compra registrada y stock actualizado"
+    
+    except Exception as e:
+        return False, f"Error: {str(e)}"
+
+
+def obtener_compras(user_id):
+    """Obtener historial de compras"""
+    response = supabase.table('compras').select('*').eq('user_id', user_id).order('fecha', desc=True).execute()
+    return pd.DataFrame(response.data) if response.data else pd.DataFrame()
+
 # =============================================================================
 # INTERFAZ PRINCIPAL DE LA APP
 # =============================================================================
@@ -504,63 +562,6 @@ def mostrar_finanzas():
     st.title("💰 Análisis Financiero")
     st.info("🚧 En desarrollo")
     # TODO: Implementar costos, márgenes, reportes
-def registrar_compra(user_id, fecha, ingrediente, cantidad, unidad, total, costo_unitario, proveedor):
-    """Registra una compra Y actualiza el stock + precio UEPS"""
-    try:
-        # 1. Registrar la compra en historial
-        compra_data = {
-            'user_id': user_id,
-            'fecha': fecha.strftime('%Y-%m-%d'),
-            'ingrediente': ingrediente,
-            'cantidad': cantidad,
-            'unidad': unidad,
-            'total': total,
-            'costo_unitario': costo_unitario,
-            'proveedor': proveedor
-        }
-        supabase.table('compras').insert(compra_data).execute()
-        
-        # 2. Actualizar stock del ingrediente
-        # Buscar si el ingrediente existe
-        ing_response = supabase.table('ingredientes').select('*').eq('user_id', user_id).eq('nombre', ingrediente).execute()
-        
-        if ing_response.data:
-            # Existe → actualizar
-            ing_actual = ing_response.data[0]
-            nuevo_stock = ing_actual['stock_actual'] + cantidad
-            nuevo_comprado = ing_actual['comprado'] + cantidad
-            
-            supabase.table('ingredientes').update({
-                'stock_actual': nuevo_stock,
-                'comprado': nuevo_comprado,
-                'costo_unitario': costo_unitario,  # UEPS: último precio
-                'precio_compra': total,
-                'cantidad_compra': cantidad
-            }).eq('id', ing_actual['id']).execute()
-        else:
-            # No existe → crear
-            supabase.table('ingredientes').insert({
-                'user_id': user_id,
-                'nombre': ingrediente,
-                'unidad': unidad,
-                'stock_actual': cantidad,
-                'comprado': cantidad,
-                'consumido': 0,
-                'costo_unitario': costo_unitario,
-                'precio_compra': total,
-                'cantidad_compra': cantidad
-            }).execute()
-        
-        return True, "Compra registrada y stock actualizado"
-    
-    except Exception as e:
-        return False, f"Error: {str(e)}"
-
-
-def obtener_compras(user_id):
-    """Obtener historial de compras"""
-    response = supabase.table('compras').select('*').eq('user_id', user_id).order('fecha', desc=True).execute()
-    return pd.DataFrame(response.data) if response.data else pd.DataFrame()
 
 
 def mostrar_compras():
