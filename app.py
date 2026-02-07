@@ -13,8 +13,8 @@ import pandas as pd
 # =============================================================================
 
 # TODO: Reemplazar con tus credenciales de Supabase
-SUPABASE_URL = "TU_SUPABASE_URL"  # Lo obtenés de tu proyecto en Supabase
-SUPABASE_KEY = "TU_SUPABASE_ANON_KEY"  # Lo obtenés de tu proyecto en Supabase
+SUPABASE_URL = "https://rqwuytrkwnmtzowkusil.supabase.co"  # Lo obtenés de tu proyecto en Supabase
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJxd3V5dHJrd25tdHpvd2t1c2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyOTk4NzIsImV4cCI6MjA4NTg3NTg3Mn0.FnvDYN0KYpIIPAx4csJ4xozV07QIUbOERqmFuhuQzDY"  # Lo obtenés de tu proyecto en Supabase
 
 # Inicializar cliente Supabase
 @st.cache_resource
