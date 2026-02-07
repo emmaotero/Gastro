@@ -504,7 +504,177 @@ def mostrar_finanzas():
     st.title("💰 Análisis Financiero")
     st.info("🚧 En desarrollo")
     # TODO: Implementar costos, márgenes, reportes
+def registrar_compra(user_id, fecha, ingrediente, cantidad, unidad, total, costo_unitario, proveedor):
+    """Registra una compra Y actualiza el stock + precio UEPS"""
+    try:
+        # 1. Registrar la compra en historial
+        compra_data = {
+            'user_id': user_id,
+            'fecha': fecha.strftime('%Y-%m-%d'),
+            'ingrediente': ingrediente,
+            'cantidad': cantidad,
+            'unidad': unidad,
+            'total': total,
+            'costo_unitario': costo_unitario,
+            'proveedor': proveedor
+        }
+        supabase.table('compras').insert(compra_data).execute()
+        
+        # 2. Actualizar stock del ingrediente
+        # Buscar si el ingrediente existe
+        ing_response = supabase.table('ingredientes').select('*').eq('user_id', user_id).eq('nombre', ingrediente).execute()
+        
+        if ing_response.data:
+            # Existe → actualizar
+            ing_actual = ing_response.data[0]
+            nuevo_stock = ing_actual['stock_actual'] + cantidad
+            nuevo_comprado = ing_actual['comprado'] + cantidad
+            
+            supabase.table('ingredientes').update({
+                'stock_actual': nuevo_stock,
+                'comprado': nuevo_comprado,
+                'costo_unitario': costo_unitario,  # UEPS: último precio
+                'precio_compra': total,
+                'cantidad_compra': cantidad
+            }).eq('id', ing_actual['id']).execute()
+        else:
+            # No existe → crear
+            supabase.table('ingredientes').insert({
+                'user_id': user_id,
+                'nombre': ingrediente,
+                'unidad': unidad,
+                'stock_actual': cantidad,
+                'comprado': cantidad,
+                'consumido': 0,
+                'costo_unitario': costo_unitario,
+                'precio_compra': total,
+                'cantidad_compra': cantidad
+            }).execute()
+        
+        return True, "Compra registrada y stock actualizado"
+    
+    except Exception as e:
+        return False, f"Error: {str(e)}"
 
+
+def obtener_compras(user_id):
+    """Obtener historial de compras"""
+    response = supabase.table('compras').select('*').eq('user_id', user_id).order('fecha', desc=True).execute()
+    return pd.DataFrame(response.data) if response.data else pd.DataFrame()
+
+
+def mostrar_compras():
+    """Sección mejorada de compras"""
+    st.title("🛒 Compras de Insumos")
+    
+    user_id = st.session_state.get('user_id')
+    
+    tab1, tab2 = st.tabs(["➕ Registrar Compra", "📋 Historial"])
+    
+    with tab1:
+        st.subheader("Nueva Compra de Insumos")
+        
+        with st.form("nueva_compra"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                fecha = st.date_input("Fecha de Compra", value=date.today())
+                
+                # Obtener ingredientes existentes
+                try:
+                    ings = supabase.table('ingredientes').select('nombre, unidad').eq('user_id', user_id).execute()
+                    lista_ings = [ing['nombre'] for ing in ings.data] if ings.data else []
+                except:
+                    lista_ings = []
+                
+                # Opción: seleccionar existente o agregar nuevo
+                usar_existente = st.checkbox("Usar ingrediente existente", value=True if lista_ings else False)
+                
+                if usar_existente and lista_ings:
+                    ingrediente = st.selectbox("Ingrediente", lista_ings)
+                    # Obtener unidad del ingrediente
+                    ing_data = supabase.table('ingredientes').select('unidad').eq('user_id', user_id).eq('nombre', ingrediente).execute()
+                    unidad = ing_data.data[0]['unidad'] if ing_data.data else 'gr'
+                    st.info(f"Unidad: {unidad}")
+                else:
+                    ingrediente = st.text_input("Nombre del Ingrediente")
+                    unidad = st.selectbox("Unidad", ["gr", "kg", "un", "ml", "l", "lata"])
+            
+            with col2:
+                cantidad = st.number_input("Cantidad Comprada", min_value=0.0, step=1.0)
+                total = st.number_input("Total Pagado ($)", min_value=0.0, step=1.0)
+                proveedor = st.text_input("Proveedor (opcional)")
+            
+            # Calcular costo unitario automáticamente
+            if cantidad > 0 and total > 0:
+                costo_unitario = total / cantidad
+                st.info(f"💰 Costo unitario: ${costo_unitario:.2f} por {unidad}")
+            else:
+                costo_unitario = 0
+            
+            submitted = st.form_submit_button("✅ Registrar Compra", type="primary")
+            
+            if submitted:
+                if not ingrediente or cantidad <= 0:
+                    st.error("Completá todos los campos obligatorios")
+                else:
+                    success, mensaje = registrar_compra(
+                        user_id, fecha, ingrediente, cantidad, unidad, 
+                        total, costo_unitario, proveedor
+                    )
+                    
+                    if success:
+                        st.success(mensaje)
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.error(mensaje)
+    
+    with tab2:
+        st.subheader("Historial de Compras")
+        
+        df = obtener_compras(user_id)
+        
+        if not df.empty:
+            # Filtros
+            col1, col2 = st.columns(2)
+            with col1:
+                if 'ingrediente' in df.columns:
+                    ingredientes_unicos = ['Todos'] + sorted(df['ingrediente'].unique().tolist())
+                    filtro_ing = st.selectbox("Filtrar por ingrediente", ingredientes_unicos)
+            
+            with col2:
+                if 'fecha' in df.columns:
+                    fecha_desde = st.date_input("Desde", value=date.today() - timedelta(days=30))
+            
+            # Aplicar filtros
+            df_filtrado = df.copy()
+            if filtro_ing != 'Todos':
+                df_filtrado = df_filtrado[df_filtrado['ingrediente'] == filtro_ing]
+            
+            if 'fecha' in df_filtrado.columns:
+                df_filtrado['fecha'] = pd.to_datetime(df_filtrado['fecha'])
+                df_filtrado = df_filtrado[df_filtrado['fecha'] >= pd.Timestamp(fecha_desde)]
+            
+            # Mostrar métricas
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Compras", len(df_filtrado))
+            with col2:
+                total_gastado = df_filtrado['total'].sum() if 'total' in df_filtrado.columns else 0
+                st.metric("Total Gastado", f"${total_gastado:,.2f}")
+            with col3:
+                ingredientes_distintos = df_filtrado['ingrediente'].nunique() if 'ingrediente' in df_filtrado.columns else 0
+                st.metric("Ingredientes Distintos", ingredientes_distintos)
+            
+            # Tabla
+            st.dataframe(
+                df_filtrado[['fecha', 'ingrediente', 'cantidad', 'unidad', 'total', 'costo_unitario', 'proveedor']],
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("No hay compras registradas. ¡Registrá la primera!")
 # =============================================================================
 # MAIN APP
 # =============================================================================
