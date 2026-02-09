@@ -102,7 +102,7 @@ def aplicar_estilos():
     }
     
     .stock-danger {
-        background-color: #FFE5E5;
+        background-color: #DC2626;
         border-left: 4px solid #FF6B6B;
         padding: 12px;
         border-radius: 4px;
