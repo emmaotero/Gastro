@@ -13,8 +13,8 @@ import io
 # CONFIGURACIÓN Y ESTILOS
 # =============================================================================
 
-SUPABASE_URL = "https://rqwuytrkwnmtzowkusil.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJxd3V5dHJrd25tdHpvd2t1c2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyOTk4NzIsImV4cCI6MjA4NTg3NTg3Mn0.FnvDYN0KYpIIPAx4csJ4xozV07QIUbOERqmFuhuQzDY"
+SUPABASE_URL = "TU_SUPABASE_URL"
+SUPABASE_KEY = "TU_SUPABASE_ANON_KEY"
 
 # CSS personalizado para mejorar diseño
 def aplicar_estilos():
@@ -55,14 +55,28 @@ def aplicar_estilos():
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
     
-    /* Tabs más bonitas */
+    /* Tabs más bonitas - ARREGLADO PARA QUE SE VEA EL TEXTO */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
+        background-color: transparent;
     }
     
     .stTabs [data-baseweb="tab"] {
         border-radius: 8px 8px 0 0;
         padding: 10px 20px;
+        background-color: #E8E8E8;
+        color: #1F1F1F !important;
+        font-weight: 500;
+    }
+    
+    .stTabs [data-baseweb="tab"][aria-selected="true"] {
+        background-color: #FF6B6B;
+        color: white !important;
+    }
+    
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #FFA07A;
+        color: white !important;
     }
     
     /* Inputs con mejor estilo */
@@ -929,13 +943,336 @@ def mostrar_pedidos():
             st.info("No hay pedidos")
 
 # Continuar con productos y calculadora...
+def actualizar_producto(producto_id, nombre, tipo, precio_venta, costo_embalaje, descripcion):
+    """Actualizar un producto"""
+    try:
+        supabase.table('productos').update({
+            'nombre': nombre,
+            'tipo': tipo,
+            'precio_venta': precio_venta,
+            'costo_embalaje': costo_embalaje,
+            'descripcion': descripcion
+        }).eq('id', producto_id).execute()
+        return True, "Producto actualizado"
+    except Exception as e:
+        return False, f"Error: {str(e)}"
+
 def mostrar_productos():
-    st.title("🍪 Productos")
-    st.info("Sección de productos con subproductos en desarrollo...")
+    """Productos CON EDICIÓN"""
+    st.title("🍪 Productos y Recetas")
+    
+    user_id = st.session_state.get('user_id')
+    
+    tab1, tab2 = st.tabs(["📋 Mis Productos", "➕ Crear Producto"])
+    
+    with tab1:
+        st.subheader("Productos Registrados")
+        
+        try:
+            response = supabase.table('productos').select('*').eq('user_id', user_id).eq('activo', True).execute()
+            
+            if response.data:
+                for producto in response.data:
+                    with st.expander(f"🍰 {producto['nombre']}", expanded=False):
+                        # Modo lectura/edición
+                        if f"edit_mode_{producto['id']}" not in st.session_state:
+                            st.session_state[f"edit_mode_{producto['id']}"] = False
+                        
+                        edit_mode = st.session_state[f"edit_mode_{producto['id']}"]
+                        
+                        col1, col2 = st.columns([3, 1])
+                        
+                        with col1:
+                            if edit_mode:
+                                # Modo edición
+                                edit_nombre = st.text_input("Nombre", value=producto['nombre'], key=f"prod_nombre_{producto['id']}")
+                                edit_tipo = st.text_input("Tipo", value=producto.get('tipo', ''), key=f"prod_tipo_{producto['id']}")
+                                edit_precio = st.number_input("Precio venta", value=float(producto.get('precio_venta', 0)), key=f"prod_precio_{producto['id']}")
+                                edit_embalaje = st.number_input("Costo embalaje", value=float(producto.get('costo_embalaje', 0)), key=f"prod_emb_{producto['id']}")
+                                edit_desc = st.text_area("Descripción", value=producto.get('descripcion', ''), key=f"prod_desc_{producto['id']}")
+                            else:
+                                # Modo lectura
+                                st.write(f"**Tipo:** {producto.get('tipo', 'N/A')}")
+                                st.write(f"**Precio de venta:** ${producto.get('precio_venta', 0):,.2f}")
+                                st.write(f"**Costo embalaje:** ${producto.get('costo_embalaje', 0):,.2f}")
+                                if producto.get('descripcion'):
+                                    st.write(f"**Descripción:** {producto['descripcion']}")
+                        
+                        with col2:
+                            if edit_mode:
+                                if st.button("💾 Guardar", key=f"save_prod_{producto['id']}", type="primary"):
+                                    success, mensaje = actualizar_producto(producto['id'], edit_nombre, edit_tipo, edit_precio, edit_embalaje, edit_desc)
+                                    if success:
+                                        st.success(mensaje)
+                                        st.session_state[f"edit_mode_{producto['id']}"] = False
+                                        st.rerun()
+                                    else:
+                                        st.error(mensaje)
+                                
+                                if st.button("❌ Cancelar", key=f"cancel_prod_{producto['id']}"):
+                                    st.session_state[f"edit_mode_{producto['id']}"] = False
+                                    st.rerun()
+                            else:
+                                if st.button("✏️ Editar", key=f"edit_prod_{producto['id']}"):
+                                    st.session_state[f"edit_mode_{producto['id']}"] = True
+                                    st.rerun()
+                                
+                                if st.button("🗑️ Eliminar", key=f"del_prod_{producto['id']}"):
+                                    supabase.table('productos').delete().eq('id', producto['id']).execute()
+                                    st.success("Producto eliminado")
+                                    st.rerun()
+                        
+                        # Mostrar receta e info adicional
+                        if not edit_mode:
+                            receta_response = supabase.table('recetas').select('*').eq('producto_id', producto['id']).execute()
+                            
+                            if receta_response.data:
+                                st.write("---")
+                                st.write("**Ingredientes:**")
+                                for ingrediente in receta_response.data:
+                                    st.write(f"- {ingrediente['ingrediente_nombre']}: {ingrediente['cantidad']} {ingrediente['unidad']}")
+                                
+                                # Calcular costo
+                                costo_total = 0
+                                for ing in receta_response.data:
+                                    ing_data = supabase.table('ingredientes').select('costo_unitario, unidad').eq('user_id', user_id).eq('nombre', ing['ingrediente_nombre']).execute()
+                                    if ing_data.data:
+                                        costo_unitario = ing_data.data[0].get('costo_unitario', 0)
+                                        unidad_ing = ing_data.data[0].get('unidad', ing['unidad'])
+                                        
+                                        # Convertir si es necesario
+                                        cantidad_convertida = normalizar_unidad(ing['cantidad'], ing['unidad'], unidad_ing)
+                                        costo_total += cantidad_convertida * costo_unitario
+                                
+                                costo_total += producto.get('costo_embalaje', 0)
+                                precio_venta = producto.get('precio_venta', 0)
+                                margen = precio_venta - costo_total if precio_venta > 0 else 0
+                                margen_pct = (margen / precio_venta * 100) if precio_venta > 0 else 0
+                                
+                                st.write("---")
+                                col_a, col_b, col_c = st.columns(3)
+                                with col_a:
+                                    st.metric("💰 Costo", f"${costo_total:,.2f}")
+                                with col_b:
+                                    st.metric("💵 Precio", f"${precio_venta:,.2f}")
+                                with col_c:
+                                    st.metric("📈 Margen", f"{margen_pct:.1f}%")
+            else:
+                st.info("No tenés productos. ¡Creá el primero!")
+        
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
+    
+    with tab2:
+        st.subheader("Crear Nuevo Producto")
+        
+        with st.form("nuevo_producto", clear_on_submit=True):
+            nombre = st.text_input("Nombre*")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                tipo = st.text_input("Tipo")
+                precio_venta = st.number_input("Precio de Venta", min_value=0.0, step=10.0)
+            with col2:
+                costo_embalaje = st.number_input("Costo Embalaje", min_value=0.0, step=1.0)
+                descripcion = st.text_area("Descripción (opcional)")
+            
+            st.write("---")
+            st.subheader("Ingredientes")
+            
+            try:
+                ingredientes_disponibles = supabase.table('ingredientes').select('nombre, unidad').eq('user_id', user_id).execute()
+                lista_ingredientes = [f"{ing['nombre']} ({ing['unidad']})" for ing in ingredientes_disponibles.data] if ingredientes_disponibles.data else []
+            except:
+                lista_ingredientes = []
+            
+            num_ingredientes = st.number_input("¿Cuántos ingredientes?", min_value=1, max_value=20, value=3, step=1)
+            
+            ingredientes_receta = []
+            for i in range(int(num_ingredientes)):
+                st.write(f"**Ingrediente {i+1}:**")
+                col1, col2, col3 = st.columns([3, 1, 1])
+                
+                with col1:
+                    if lista_ingredientes:
+                        ing_seleccionado = st.selectbox("Ingrediente", lista_ingredientes, key=f"ing_{i}", label_visibility="collapsed")
+                        nombre_ing = ing_seleccionado.split(" (")[0]
+                    else:
+                        nombre_ing = st.text_input("Ingrediente", key=f"ing_nombre_{i}", label_visibility="collapsed")
+                
+                with col2:
+                    cantidad = st.number_input("Cantidad", min_value=0.0, step=0.1, key=f"cant_{i}", label_visibility="collapsed")
+                with col3:
+                    unidad = st.selectbox("Unidad", ["gr", "kg", "un", "ml", "l"], key=f"unidad_{i}", label_visibility="collapsed")
+                
+                if cantidad > 0:
+                    ingredientes_receta.append({'nombre': nombre_ing, 'cantidad': cantidad, 'unidad': unidad})
+            
+            submitted = st.form_submit_button("✅ Crear Producto", type="primary", use_container_width=True)
+            
+            if submitted:
+                if not nombre:
+                    st.error("El nombre es obligatorio")
+                elif not ingredientes_receta:
+                    st.error("Agregá al menos un ingrediente")
+                else:
+                    try:
+                        producto_data = {
+                            'user_id': user_id,
+                            'nombre': nombre,
+                            'tipo': tipo if tipo else None,
+                            'descripcion': descripcion if descripcion else None,
+                            'precio_venta': precio_venta,
+                            'costo_embalaje': costo_embalaje,
+                            'activo': True
+                        }
+                        
+                        response = supabase.table('productos').insert(producto_data).execute()
+                        producto_id = response.data[0]['id']
+                        
+                        for ing in ingredientes_receta:
+                            receta_data = {
+                                'producto_id': producto_id,
+                                'ingrediente_nombre': ing['nombre'],
+                                'cantidad': ing['cantidad'],
+                                'unidad': ing['unidad']
+                            }
+                            supabase.table('recetas').insert(receta_data).execute()
+                        
+                        st.success(f"✅ Producto '{nombre}' creado!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
 
 def mostrar_calculadora():
+    """Calculadora de precios y márgenes"""
     st.title("💵 Calculadora de Precios")
-    st.info("Calculadora en desarrollo...")
+    st.write("Calculá el precio de venta ideal según tus costos y margen deseado")
+    
+    user_id = st.session_state.get('user_id')
+    
+    # Obtener productos
+    try:
+        productos_response = supabase.table('productos').select('*').eq('user_id', user_id).eq('activo', True).execute()
+        productos = productos_response.data if productos_response.data else []
+    except:
+        productos = []
+    
+    if not productos:
+        st.warning("No tenés productos creados. Andá a la sección **🍪 Productos** para crear uno.")
+        return
+    
+    # Selector de producto
+    nombres_productos = [p['nombre'] for p in productos]
+    producto_seleccionado = st.selectbox("Seleccioná un producto:", nombres_productos)
+    
+    # Obtener datos del producto
+    producto = next((p for p in productos if p['nombre'] == producto_seleccionado), None)
+    
+    if producto:
+        st.write("---")
+        
+        # Calcular costo base
+        receta_response = supabase.table('recetas').select('*').eq('producto_id', producto['id']).execute()
+        
+        costo_ingredientes = 0
+        if receta_response.data:
+            for ing in receta_response.data:
+                ing_data = supabase.table('ingredientes').select('costo_unitario, unidad').eq('user_id', user_id).eq('nombre', ing['ingrediente_nombre']).execute()
+                if ing_data.data:
+                    costo_unitario = ing_data.data[0].get('costo_unitario', 0)
+                    unidad_ing = ing_data.data[0].get('unidad', ing['unidad'])
+                    cantidad_convertida = normalizar_unidad(ing['cantidad'], ing['unidad'], unidad_ing)
+                    costo_ingredientes += cantidad_convertida * costo_unitario
+        
+        costo_embalaje = producto.get('costo_embalaje', 0)
+        
+        # Inputs adicionales
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Costos")
+            st.metric("Costo Ingredientes", f"${costo_ingredientes:,.2f}")
+            st.metric("Costo Embalaje", f"${costo_embalaje:,.2f}")
+            
+            costos_extras = st.number_input(
+                "Costos Extras (luz, gas, mano de obra, etc.)",
+                min_value=0.0,
+                step=10.0,
+                help="Agregá cualquier costo adicional que quieras incluir"
+            )
+            
+            costo_total = costo_ingredientes + costo_embalaje + costos_extras
+            st.metric("**COSTO TOTAL**", f"${costo_total:,.2f}")
+        
+        with col2:
+            st.subheader("Precio de Venta")
+            
+            # Opción 1: Por margen
+            margen_deseado = st.slider("Margen de Ganancia (%)", min_value=0, max_value=200, value=50, step=5)
+            
+            precio_venta_calculado = costo_total * (1 + margen_deseado / 100)
+            
+            st.metric("Precio Calculado", f"${precio_venta_calculado:,.2f}")
+            st.metric("Ganancia por Unidad", f"${precio_venta_calculado - costo_total:,.2f}")
+            
+            # Opción 2: Precio manual
+            st.write("---")
+            st.write("O ingresá un precio manual:")
+            precio_manual = st.number_input("Precio de Venta Manual", min_value=0.0, value=precio_venta_calculado, step=10.0)
+            
+            if precio_manual > 0:
+                margen_real = ((precio_manual - costo_total) / precio_manual * 100) if precio_manual > 0 else 0
+                ganancia_real = precio_manual - costo_total
+                
+                st.metric("Margen Real", f"{margen_real:.1f}%")
+                st.metric("Ganancia Real", f"${ganancia_real:,.2f}")
+        
+        # Simulador de pedido
+        st.write("---")
+        st.subheader("💰 Simulador de Pedido")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            cantidad_pedido = st.number_input("Cantidad de unidades", min_value=1, value=10, step=1)
+        
+        with col2:
+            precio_usar = st.radio("Usar precio:", ["Calculado", "Manual"])
+            precio_final = precio_venta_calculado if precio_usar == "Calculado" else precio_manual
+        
+        with col3:
+            st.write("")
+            st.write("")
+            st.metric("Precio Unitario", f"${precio_final:,.2f}")
+        
+        # Resultados del pedido
+        costo_total_pedido = costo_total * cantidad_pedido
+        ingreso_total_pedido = precio_final * cantidad_pedido
+        ganancia_total_pedido = ingreso_total_pedido - costo_total_pedido
+        
+        st.write("### Resultado del Pedido:")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("Unidades", cantidad_pedido)
+        with col2:
+            st.metric("Costo Total", f"${costo_total_pedido:,.2f}")
+        with col3:
+            st.metric("Ingreso Total", f"${ingreso_total_pedido:,.2f}")
+        with col4:
+            st.metric("**Ganancia**", f"${ganancia_total_pedido:,.2f}", delta=f"{((ganancia_total_pedido/costo_total_pedido)*100):.1f}%")
+        
+        # Botón para actualizar precio en el producto
+        st.write("---")
+        if st.button(f"💾 Guardar ${precio_final:,.2f} como precio de venta de '{producto['nombre']}'", type="primary"):
+            try:
+                supabase.table('productos').update({'precio_venta': precio_final}).eq('id', producto['id']).execute()
+                st.success(f"Precio actualizado a ${precio_final:,.2f}")
+                st.balloons()
+            except Exception as e:
+                st.error(f"Error: {str(e)}")
 
 def mostrar_finanzas():
     st.title("💰 Finanzas")
