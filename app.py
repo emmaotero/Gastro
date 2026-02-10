@@ -1240,42 +1240,113 @@ def mostrar_calculadora():
         col1, col2 = st.columns(2)
         
         with col1:
-            st.subheader("Costos")
-            st.metric("Costo Ingredientes", f"${costo_ingredientes:,.2f}")
-            st.metric("Costo Embalaje", f"${costo_embalaje:,.2f}")
+            st.subheader("💵 Costos de Producción")
+            st.metric("Ingredientes", f"${costo_ingredientes:,.2f}")
+            st.metric("Embalaje", f"${costo_embalaje:,.2f}")
             
-            costos_extras = st.number_input(
-                "Costos Extras (luz, gas, mano de obra, etc.)",
+            st.write("---")
+            st.write("**Costos Operativos:**")
+            
+            costo_luz_gas = st.number_input(
+                "🔥 Luz, Gas, Servicios",
                 min_value=0.0,
-                step=10.0,
-                help="Agregá cualquier costo adicional que quieras incluir"
+                step=5.0,
+                help="Costo de energía y servicios para hacer este producto"
             )
             
-            costo_total = costo_ingredientes + costo_embalaje + costos_extras
-            st.metric("**COSTO TOTAL**", f"${costo_total:,.2f}")
+            otros_costos = st.number_input(
+                "📦 Otros costos (alquiler, transporte, etc.)",
+                min_value=0.0,
+                step=5.0,
+                help="Otros gastos operativos"
+            )
+            
+            st.write("---")
+            st.write("**👥 Mano de Obra:**")
+            
+            tipo_mano_obra = st.radio(
+                "Tipo de mano de obra",
+                ["Sin incluir", "Empleado (costo real)", "Propia (ganancia)"],
+                help="Empleado = costo que pagás. Propia = lo que querés ganar vos por tu trabajo"
+            )
+            
+            if tipo_mano_obra == "Empleado (costo real)":
+                mano_obra_empleado = st.number_input(
+                    "💼 Costo empleado por unidad",
+                    min_value=0.0,
+                    step=10.0,
+                    help="Cuánto te cuesta pagarle al empleado por hacer este producto"
+                )
+            else:
+                mano_obra_empleado = 0
+            
+            if tipo_mano_obra == "Propia (ganancia)":
+                mano_obra_propia = st.number_input(
+                    "💰 Tu ganancia por unidad",
+                    min_value=0.0,
+                    step=10.0,
+                    help="Cuánto querés ganar vos por hacer este producto"
+                )
+            else:
+                mano_obra_propia = 0
+            
+            # Calcular costos
+            costo_total_produccion = costo_ingredientes + costo_embalaje + costo_luz_gas + otros_costos + mano_obra_empleado
+            
+            st.write("---")
+            st.metric("**💰 COSTO TOTAL DE PRODUCCIÓN**", f"${costo_total_produccion:,.2f}")
+            
+            if mano_obra_propia > 0:
+                st.info(f"💡 + Tu ganancia: ${mano_obra_propia:,.2f}")
         
         with col2:
-            st.subheader("Precio de Venta")
+            st.subheader("💵 Precio de Venta")
             
-            # Opción 1: Por margen
-            margen_deseado = st.slider("Margen de Ganancia (%)", min_value=0, max_value=200, value=50, step=5)
+            # Opción 1: Por margen sobre COSTO (sin mano de obra propia)
+            if tipo_mano_obra == "Propia (ganancia)":
+                st.write("**Opción 1: Precio Fijo (tu ganancia ya está incluida)**")
+                precio_con_ganancia_propia = costo_total_produccion + mano_obra_propia
+                st.metric("Precio Sugerido", f"${precio_con_ganancia_propia:,.2f}")
+                st.caption(f"Costo: ${costo_total_produccion:,.2f} + Tu ganancia: ${mano_obra_propia:,.2f}")
+                
+                st.write("---")
+                st.write("**Opción 2: Agregar margen extra**")
+                margen_extra = st.slider("Margen adicional (%)", min_value=0, max_value=100, value=0, step=5)
+                precio_con_margen = precio_con_ganancia_propia * (1 + margen_extra / 100)
+                
+                if margen_extra > 0:
+                    ganancia_extra = precio_con_margen - precio_con_ganancia_propia
+                    st.metric("Precio Final", f"${precio_con_margen:,.2f}")
+                    st.metric("Ganancia Extra", f"${ganancia_extra:,.2f}")
+                    st.metric("Tu Ganancia Total", f"${mano_obra_propia + ganancia_extra:,.2f}")
+                
+                precio_venta_calculado = precio_con_margen if margen_extra > 0 else precio_con_ganancia_propia
             
-            precio_venta_calculado = costo_total * (1 + margen_deseado / 100)
-            
-            st.metric("Precio Calculado", f"${precio_venta_calculado:,.2f}")
-            st.metric("Ganancia por Unidad", f"${precio_venta_calculado - costo_total:,.2f}")
+            else:
+                # Margen normal sobre costo total
+                margen_deseado = st.slider("Margen de Ganancia (%)", min_value=0, max_value=200, value=50, step=5)
+                precio_venta_calculado = costo_total_produccion * (1 + margen_deseado / 100)
+                ganancia_unitaria = precio_venta_calculado - costo_total_produccion
+                
+                st.metric("Precio Calculado", f"${precio_venta_calculado:,.2f}")
+                st.metric("Ganancia por Unidad", f"${ganancia_unitaria:,.2f}")
             
             # Opción 2: Precio manual
             st.write("---")
-            st.write("O ingresá un precio manual:")
+            st.write("**O ingresá un precio manual:**")
             precio_manual = st.number_input("Precio de Venta Manual", min_value=0.0, value=precio_venta_calculado, step=10.0)
             
             if precio_manual > 0:
-                margen_real = ((precio_manual - costo_total) / precio_manual * 100) if precio_manual > 0 else 0
-                ganancia_real = precio_manual - costo_total
-                
-                st.metric("Margen Real", f"{margen_real:.1f}%")
-                st.metric("Ganancia Real", f"${ganancia_real:,.2f}")
+                if tipo_mano_obra == "Propia (ganancia)":
+                    ganancia_real_total = precio_manual - costo_total_produccion
+                    st.metric("Tu Ganancia Total", f"${ganancia_real_total:,.2f}")
+                    st.caption(f"Incluye tu mano de obra de ${mano_obra_propia:,.2f}")
+                else:
+                    margen_real = ((precio_manual - costo_total_produccion) / precio_manual * 100) if precio_manual > 0 else 0
+                    ganancia_real = precio_manual - costo_total_produccion
+                    
+                    st.metric("Margen Real", f"{margen_real:.1f}%")
+                    st.metric("Ganancia Real", f"${ganancia_real:,.2f}")
         
         # Simulador de pedido
         st.write("---")
