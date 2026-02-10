@@ -13,8 +13,8 @@ import io
 # CONFIGURACIÓN Y ESTILOS
 # =============================================================================
 
-SUPABASE_URL = "https://rqwuytrkwnmtzowkusil.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJxd3V5dHJrd25tdHpvd2t1c2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyOTk4NzIsImV4cCI6MjA4NTg3NTg3Mn0.FnvDYN0KYpIIPAx4csJ4xozV07QIUbOERqmFuhuQzDY"
+SUPABASE_URL = "TU_SUPABASE_URL"
+SUPABASE_KEY = "TU_SUPABASE_ANON_KEY"
 
 # CSS personalizado para mejorar diseño
 def aplicar_estilos():
@@ -37,7 +37,7 @@ def aplicar_estilos():
     
     /* Cards con sombra */
     .stExpander {
-        background-color: blue;
+        background-color: white;
         border-radius: 10px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         margin-bottom: 10px;
@@ -92,29 +92,35 @@ def aplicar_estilos():
         overflow: hidden;
     }
     
-    /* Alertas personalizadas */
+    /* Alertas personalizadas - COLORES MÁS OSCUROS */
     .stock-warning {
-        background-color: #FFF3CD;
-        border-left: 4px solid #FFA07A;
+        background-color: #FFB74D;
+        border-left: 4px solid #F57C00;
         padding: 12px;
         border-radius: 4px;
         margin: 10px 0;
+        color: #1F1F1F;
+        font-weight: 500;
     }
     
     .stock-danger {
-        background-color: #DC2626;
-        border-left: 4px solid #FF6B6B;
+        background-color: #EF5350;
+        border-left: 4px solid #C62828;
         padding: 12px;
         border-radius: 4px;
         margin: 10px 0;
+        color: white;
+        font-weight: 500;
     }
     
     .stock-ok {
-        background-color: #E8F5E9;
-        border-left: 4px solid #4CAF50;
+        background-color: #66BB6A;
+        border-left: 4px solid #2E7D32;
         padding: 12px;
         border-radius: 4px;
         margin: 10px 0;
+        color: white;
+        font-weight: 500;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -129,29 +135,6 @@ supabase: Client = get_supabase_client()
 # UTILIDADES
 # =============================================================================
 
-def normalizar_unidad(cantidad, unidad_origen, unidad_destino):
-    """Convierte entre unidades compatibles"""
-    conversiones_peso = {
-        ('kg', 'gr'): 1000,
-        ('gr', 'kg'): 0.001,
-        ('kg', 'kg'): 1,
-        ('gr', 'gr'): 1
-    }
-    
-    conversiones_volumen = {
-        ('l', 'ml'): 1000,
-        ('ml', 'l'): 0.001,
-        ('l', 'l'): 1,
-        ('ml', 'ml'): 1
-    }
-    
-    if (unidad_origen, unidad_destino) in conversiones_peso:
-        return cantidad * conversiones_peso[(unidad_origen, unidad_destino)]
-    elif (unidad_origen, unidad_destino) in conversiones_volumen:
-        return cantidad * conversiones_volumen[(unidad_origen, unidad_destino)]
-    else:
-        return cantidad
-
 def exportar_a_excel(df, nombre_hoja):
     """Exporta DataFrame a Excel"""
     output = io.BytesIO()
@@ -163,11 +146,11 @@ def exportar_a_excel(df, nombre_hoja):
 def mostrar_stock_badge(stock):
     """Muestra badge de stock con color según estado"""
     if stock < 0:
-        return f'<span style="background-color:#FF6B6B; color:white; padding:4px 12px; border-radius:12px; font-weight:600;">⚠️ {stock:.1f} (FALTA)</span>'
+        return f'<span style="background-color:#D32F2F; color:white; padding:4px 12px; border-radius:12px; font-weight:600;">⚠️ {stock:.1f} (FALTA)</span>'
     elif stock < 10:
-        return f'<span style="background-color:#FFA07A; color:white; padding:4px 12px; border-radius:12px; font-weight:600;">⚡ {stock:.1f} (BAJO)</span>'
+        return f'<span style="background-color:#F57C00; color:white; padding:4px 12px; border-radius:12px; font-weight:600;">⚡ {stock:.1f} (BAJO)</span>'
     else:
-        return f'<span style="background-color:#4CAF50; color:white; padding:4px 12px; border-radius:12px; font-weight:600;">✓ {stock:.1f}</span>'
+        return f'<span style="background-color:#388E3C; color:white; padding:4px 12px; border-radius:12px; font-weight:600;">✓ {stock:.1f}</span>'
 
 # =============================================================================
 # FUNCIONES DE PERFIL DE USUARIO
@@ -367,11 +350,8 @@ def registrar_compra(user_id, fecha, ingrediente, cantidad, unidad, total, costo
         
         if ing_response.data:
             ing_actual = ing_response.data[0]
-            unidad_ing = ing_actual['unidad']
-            cantidad_convertida = normalizar_unidad(cantidad, unidad, unidad_ing)
-            
-            nuevo_stock = ing_actual['stock_actual'] + cantidad_convertida
-            nuevo_comprado = ing_actual['comprado'] + cantidad_convertida
+            nuevo_stock = ing_actual['stock_actual'] + cantidad
+            nuevo_comprado = ing_actual['comprado'] + cantidad
             
             supabase.table('ingredientes').update({
                 'stock_actual': nuevo_stock,
@@ -432,15 +412,12 @@ def registrar_pedido_con_descuento(user_id, fecha, producto_nombre, cantidad, ti
             if stock_response.data:
                 ing_actual = stock_response.data[0]
                 stock_actual = ing_actual['stock_actual']
-                unidad_ing = ing_actual['unidad']
-                cantidad_convertida = normalizar_unidad(cantidad_necesaria, ingrediente['unidad'], unidad_ing)
-                
-                if stock_actual < cantidad_convertida:
-                    faltante = cantidad_convertida - stock_actual
+                if stock_actual < cantidad_necesaria:
+                    faltante = cantidad_necesaria - stock_actual
                     faltantes_info.append({
                         'ingrediente': ingrediente['ingrediente_nombre'],
                         'faltante': faltante,
-                        'unidad': unidad_ing
+                        'unidad': ingrediente['unidad']
                     })
         
         # Registrar pedido (SIEMPRE)
@@ -466,11 +443,8 @@ def registrar_pedido_con_descuento(user_id, fecha, producto_nombre, cantidad, ti
             
             if ing_response.data:
                 ing_actual = ing_response.data[0]
-                unidad_ing = ing_actual['unidad']
-                cantidad_convertida = normalizar_unidad(cantidad_a_descontar, ingrediente['unidad'], unidad_ing)
-                
-                nuevo_stock = ing_actual['stock_actual'] - cantidad_convertida
-                nuevo_consumido = ing_actual['consumido'] + cantidad_convertida
+                nuevo_stock = ing_actual['stock_actual'] - cantidad_a_descontar
+                nuevo_consumido = ing_actual['consumido'] + cantidad_a_descontar
                 
                 supabase.table('ingredientes').update({
                     'stock_actual': nuevo_stock,
@@ -799,7 +773,7 @@ def mostrar_compras():
                     with col_a:
                         ingrediente = st.text_input("Ingrediente nuevo*")
                     with col_b:
-                        unidad = st.selectbox("Unidad*", ["gr", "kg", "un", "ml", "l", "lata"])
+                        unidad = st.selectbox("Unidad*", ["gr", "un"])
             
             with col2:
                 cantidad = st.number_input("Cantidad*", min_value=0.0, value=0.0, step=1.0)
@@ -830,14 +804,32 @@ def mostrar_compras():
         df = obtener_compras(user_id)
         
         if not df.empty:
-            # Exportar
-            excel_file = exportar_a_excel(df, "Compras")
-            st.download_button(
-                label="📥 Exportar a Excel",
-                data=excel_file,
-                file_name=f"compras_{date.today()}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                # Exportar
+                excel_file = exportar_a_excel(df, "Compras")
+                st.download_button(
+                    label="📥 Exportar a Excel",
+                    data=excel_file,
+                    file_name=f"compras_{date.today()}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            
+            with col2:
+                # Botón para limpiar historial
+                if st.button("🗑️ Limpiar Historial Completo", type="secondary"):
+                    if st.session_state.get('confirmar_eliminar_compras', False):
+                        try:
+                            supabase.table('compras').delete().eq('user_id', user_id).execute()
+                            st.success("✅ Historial de compras eliminado")
+                            st.session_state['confirmar_eliminar_compras'] = False
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+                    else:
+                        st.session_state['confirmar_eliminar_compras'] = True
+                        st.warning("⚠️ Apretá de nuevo para confirmar la eliminación")
             
             # Mostrar
             st.dataframe(
@@ -926,13 +918,31 @@ def mostrar_pedidos():
         df = obtener_pedidos(user_id)
         
         if not df.empty:
-            excel_file = exportar_a_excel(df, "Pedidos")
-            st.download_button(
-                label="📥 Exportar a Excel",
-                data=excel_file,
-                file_name=f"pedidos_{date.today()}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            col1, col2 = st.columns([3, 1])
+            
+            with col1:
+                excel_file = exportar_a_excel(df, "Pedidos")
+                st.download_button(
+                    label="📥 Exportar a Excel",
+                    data=excel_file,
+                    file_name=f"pedidos_{date.today()}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            
+            with col2:
+                # Botón para limpiar historial
+                if st.button("🗑️ Limpiar Historial Completo", type="secondary", key="limpiar_pedidos"):
+                    if st.session_state.get('confirmar_eliminar_pedidos', False):
+                        try:
+                            supabase.table('pedidos').delete().eq('user_id', user_id).execute()
+                            st.success("✅ Historial de pedidos eliminado")
+                            st.session_state['confirmar_eliminar_pedidos'] = False
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+                    else:
+                        st.session_state['confirmar_eliminar_pedidos'] = True
+                        st.warning("⚠️ Apretá de nuevo para confirmar")
             
             st.dataframe(
                 df[['fecha', 'producto', 'cantidad', 'tipo', 'precio_unitario', 'total', 'cliente']].head(50),
@@ -1103,7 +1113,7 @@ def mostrar_productos():
                 with col2:
                     cantidad = st.number_input("Cantidad", min_value=0.0, step=0.1, key=f"cant_{i}", label_visibility="collapsed")
                 with col3:
-                    unidad = st.selectbox("Unidad", ["gr", "kg", "un", "ml", "l"], key=f"unidad_{i}", label_visibility="collapsed")
+                    unidad = st.selectbox("Unidad", ["gr", "un"], key=f"unidad_{i}", label_visibility="collapsed")
                 
                 if cantidad > 0:
                     ingredientes_receta.append({'nombre': nombre_ing, 'cantidad': cantidad, 'unidad': unidad})
@@ -1181,9 +1191,7 @@ def mostrar_calculadora():
                 ing_data = supabase.table('ingredientes').select('costo_unitario, unidad').eq('user_id', user_id).eq('nombre', ing['ingrediente_nombre']).execute()
                 if ing_data.data:
                     costo_unitario = ing_data.data[0].get('costo_unitario', 0)
-                    unidad_ing = ing_data.data[0].get('unidad', ing['unidad'])
-                    cantidad_convertida = normalizar_unidad(ing['cantidad'], ing['unidad'], unidad_ing)
-                    costo_ingredientes += cantidad_convertida * costo_unitario
+                    costo_ingredientes += ing['cantidad'] * costo_unitario
         
         costo_embalaje = producto.get('costo_embalaje', 0)
         
@@ -1275,8 +1283,272 @@ def mostrar_calculadora():
                 st.error(f"Error: {str(e)}")
 
 def mostrar_finanzas():
-    st.title("💰 Finanzas")
-    st.info("Análisis financiero en desarrollo...")
+    """Análisis financiero completo con filtros y métricas"""
+    st.title("💰 Resumen Financiero")
+    
+    user_id = st.session_state.get('user_id')
+    
+    # Filtros de período
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        periodo = st.selectbox(
+            "Período",
+            ["Hoy", "Esta Semana", "Este Mes", "Este Año", "Personalizado"]
+        )
+    
+    # Calcular fechas según período
+    hoy = date.today()
+    
+    if periodo == "Hoy":
+        fecha_desde = hoy
+        fecha_hasta = hoy
+    elif periodo == "Esta Semana":
+        fecha_desde = hoy - timedelta(days=hoy.weekday())
+        fecha_hasta = hoy
+    elif periodo == "Este Mes":
+        fecha_desde = hoy.replace(day=1)
+        fecha_hasta = hoy
+    elif periodo == "Este Año":
+        fecha_desde = hoy.replace(month=1, day=1)
+        fecha_hasta = hoy
+    else:  # Personalizado
+        with col2:
+            fecha_desde = st.date_input("Desde", value=hoy - timedelta(days=30))
+        with col3:
+            fecha_hasta = st.date_input("Hasta", value=hoy)
+    
+    st.write("---")
+    
+    # Obtener datos
+    df_pedidos = obtener_pedidos(user_id)
+    df_compras = obtener_compras(user_id)
+    
+    # Filtrar por fechas
+    if not df_pedidos.empty:
+        df_pedidos['fecha'] = pd.to_datetime(df_pedidos['fecha'])
+        df_pedidos_filtrado = df_pedidos[
+            (df_pedidos['fecha'] >= pd.Timestamp(fecha_desde)) &
+            (df_pedidos['fecha'] <= pd.Timestamp(fecha_hasta))
+        ]
+    else:
+        df_pedidos_filtrado = pd.DataFrame()
+    
+    if not df_compras.empty:
+        df_compras['fecha'] = pd.to_datetime(df_compras['fecha'])
+        df_compras_filtrado = df_compras[
+            (df_compras['fecha'] >= pd.Timestamp(fecha_desde)) &
+            (df_compras['fecha'] <= pd.Timestamp(fecha_hasta))
+        ]
+    else:
+        df_compras_filtrado = pd.DataFrame()
+    
+    # === MÉTRICAS PRINCIPALES ===
+    st.subheader(f"📊 Resumen del período: {fecha_desde.strftime('%d/%m/%Y')} - {fecha_hasta.strftime('%d/%m/%Y')}")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    # Total vendido (solo ventas, no regalos)
+    if not df_pedidos_filtrado.empty:
+        ventas = df_pedidos_filtrado[df_pedidos_filtrado['tipo'] == 'venta']
+        total_vendido = ventas['total'].sum() if 'total' in ventas.columns else 0
+        num_ventas = len(ventas)
+    else:
+        total_vendido = 0
+        num_ventas = 0
+    
+    # Total invertido
+    if not df_compras_filtrado.empty:
+        total_invertido = df_compras_filtrado['total'].sum() if 'total' in df_compras_filtrado.columns else 0
+        num_compras = len(df_compras_filtrado)
+    else:
+        total_invertido = 0
+        num_compras = 0
+    
+    # Ganancia neta
+    ganancia_neta = total_vendido - total_invertido
+    
+    # Margen
+    margen_pct = (ganancia_neta / total_vendido * 100) if total_vendido > 0 else 0
+    
+    with col1:
+        st.metric("💵 Total Vendido", f"${total_vendido:,.0f}", f"{num_ventas} ventas")
+    with col2:
+        st.metric("🛒 Total Invertido", f"${total_invertido:,.0f}", f"{num_compras} compras")
+    with col3:
+        st.metric("📈 Ganancia Neta", f"${ganancia_neta:,.0f}", 
+                 delta=f"{margen_pct:.1f}%" if ganancia_neta >= 0 else f"-{abs(margen_pct):.1f}%",
+                 delta_color="normal" if ganancia_neta >= 0 else "inverse")
+    with col4:
+        ticket_promedio = total_vendido / num_ventas if num_ventas > 0 else 0
+        st.metric("🎫 Ticket Promedio", f"${ticket_promedio:,.0f}")
+    
+    st.write("---")
+    
+    # === PRODUCTOS MÁS VENDIDOS ===
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🏆 Productos Más Vendidos")
+        if not df_pedidos_filtrado.empty and 'producto' in df_pedidos_filtrado.columns:
+            top_productos = df_pedidos_filtrado.groupby('producto').agg({
+                'cantidad': 'sum',
+                'total': 'sum'
+            }).sort_values('cantidad', ascending=False).head(10)
+            
+            if not top_productos.empty:
+                for idx, row in top_productos.iterrows():
+                    col_a, col_b, col_c = st.columns([3, 1, 1])
+                    with col_a:
+                        st.write(f"**{idx}**")
+                    with col_b:
+                        st.write(f"{int(row['cantidad'])} unid.")
+                    with col_c:
+                        total_prod = row['total'] if pd.notna(row['total']) else 0
+                        st.write(f"${total_prod:,.0f}")
+            else:
+                st.info("Sin ventas en este período")
+        else:
+            st.info("Sin ventas registradas")
+    
+    with col2:
+        st.subheader("📦 Ingredientes Más Comprados")
+        if not df_compras_filtrado.empty and 'ingrediente' in df_compras_filtrado.columns:
+            top_ingredientes = df_compras_filtrado.groupby('ingrediente').agg({
+                'cantidad': 'sum',
+                'total': 'sum'
+            }).sort_values('total', ascending=False).head(10)
+            
+            if not top_ingredientes.empty:
+                for idx, row in top_ingredientes.iterrows():
+                    col_a, col_b, col_c = st.columns([3, 1, 1])
+                    with col_a:
+                        st.write(f"**{idx}**")
+                    with col_b:
+                        st.write(f"{row['cantidad']:.0f} gr")
+                    with col_c:
+                        st.write(f"${row['total']:,.0f}")
+            else:
+                st.info("Sin compras en este período")
+        else:
+            st.info("Sin compras registradas")
+    
+    st.write("---")
+    
+    # === EVOLUCIÓN TEMPORAL ===
+    st.subheader("📈 Evolución de Ventas e Inversiones")
+    
+    if not df_pedidos_filtrado.empty or not df_compras_filtrado.empty:
+        # Crear DataFrame para gráfico
+        fechas_todas = []
+        
+        if not df_pedidos_filtrado.empty:
+            df_ventas_por_dia = df_pedidos_filtrado.groupby(df_pedidos_filtrado['fecha'].dt.date)['total'].sum().reset_index()
+            df_ventas_por_dia.columns = ['fecha', 'ventas']
+            fechas_todas.append(df_ventas_por_dia)
+        
+        if not df_compras_filtrado.empty:
+            df_compras_por_dia = df_compras_filtrado.groupby(df_compras_filtrado['fecha'].dt.date)['total'].sum().reset_index()
+            df_compras_por_dia.columns = ['fecha', 'compras']
+            fechas_todas.append(df_compras_por_dia)
+        
+        if fechas_todas:
+            # Combinar datos
+            if len(fechas_todas) == 2:
+                df_evolucion = pd.merge(fechas_todas[0], fechas_todas[1], on='fecha', how='outer').fillna(0)
+            else:
+                df_evolucion = fechas_todas[0]
+                if 'ventas' not in df_evolucion.columns:
+                    df_evolucion['ventas'] = 0
+                if 'compras' not in df_evolucion.columns:
+                    df_evolucion['compras'] = 0
+            
+            df_evolucion = df_evolucion.sort_values('fecha')
+            
+            # Mostrar tabla
+            st.dataframe(
+                df_evolucion,
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Calcular ganancia diaria
+            if 'ventas' in df_evolucion.columns and 'compras' in df_evolucion.columns:
+                df_evolucion['ganancia'] = df_evolucion['ventas'] - df_evolucion['compras']
+                
+                st.write("**Ganancia por día:**")
+                for idx, row in df_evolucion.iterrows():
+                    ganancia_dia = row['ganancia']
+                    color = "🟢" if ganancia_dia >= 0 else "🔴"
+                    st.write(f"{color} {row['fecha']}: ${ganancia_dia:,.0f}")
+    else:
+        st.info("Sin datos en este período")
+    
+    st.write("---")
+    
+    # === COMPARATIVA CON PERÍODO ANTERIOR ===
+    st.subheader("📊 Comparativa con Período Anterior")
+    
+    # Calcular período anterior
+    duracion = (fecha_hasta - fecha_desde).days
+    fecha_desde_ant = fecha_desde - timedelta(days=duracion)
+    fecha_hasta_ant = fecha_desde - timedelta(days=1)
+    
+    # Datos período anterior
+    if not df_pedidos.empty:
+        ventas_ant = df_pedidos[
+            (df_pedidos['fecha'] >= pd.Timestamp(fecha_desde_ant)) &
+            (df_pedidos['fecha'] <= pd.Timestamp(fecha_hasta_ant)) &
+            (df_pedidos['tipo'] == 'venta')
+        ]
+        total_vendido_ant = ventas_ant['total'].sum() if 'total' in ventas_ant.columns else 0
+    else:
+        total_vendido_ant = 0
+    
+    if not df_compras.empty:
+        compras_ant = df_compras[
+            (df_compras['fecha'] >= pd.Timestamp(fecha_desde_ant)) &
+            (df_compras['fecha'] <= pd.Timestamp(fecha_hasta_ant))
+        ]
+        total_invertido_ant = compras_ant['total'].sum() if 'total' in compras_ant.columns else 0
+    else:
+        total_invertido_ant = 0
+    
+    ganancia_neta_ant = total_vendido_ant - total_invertido_ant
+    
+    # Calcular variaciones
+    var_ventas = ((total_vendido - total_vendido_ant) / total_vendido_ant * 100) if total_vendido_ant > 0 else 0
+    var_compras = ((total_invertido - total_invertido_ant) / total_invertido_ant * 100) if total_invertido_ant > 0 else 0
+    var_ganancia = ((ganancia_neta - ganancia_neta_ant) / abs(ganancia_neta_ant) * 100) if ganancia_neta_ant != 0 else 0
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric(
+            "Ventas vs Período Anterior",
+            f"${total_vendido:,.0f}",
+            f"{var_ventas:+.1f}%",
+            delta_color="normal" if var_ventas >= 0 else "inverse"
+        )
+        st.caption(f"Anterior: ${total_vendido_ant:,.0f}")
+    
+    with col2:
+        st.metric(
+            "Inversión vs Período Anterior",
+            f"${total_invertido:,.0f}",
+            f"{var_compras:+.1f}%",
+            delta_color="inverse" if var_compras >= 0 else "normal"
+        )
+        st.caption(f"Anterior: ${total_invertido_ant:,.0f}")
+    
+    with col3:
+        st.metric(
+            "Ganancia vs Período Anterior",
+            f"${ganancia_neta:,.0f}",
+            f"{var_ganancia:+.1f}%",
+            delta_color="normal" if var_ganancia >= 0 else "inverse"
+        )
+        st.caption(f"Anterior: ${ganancia_neta_ant:,.0f}")
 
 # =============================================================================
 # MAIN
