@@ -767,11 +767,18 @@ def mostrar_inventario():
                 # Mostrar detalles
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Comprado", f"{row['comprado']:.1f}")
+                    st.metric("Comprado", f"{row['comprado']:.1f} {row['unidad']}")
                 with col2:
-                    st.metric("Consumido", f"{row['consumido']:.1f}")
+                    st.metric("Consumido", f"{row['consumido']:.1f} {row['unidad']}")
                 with col3:
-                    st.metric("Costo/u", f"${row['costo_unitario']:.2f}")
+                    costo_unitario = row['costo_unitario']
+                    # Si es en gramos, mostrar también el costo por kilo
+                    if row['unidad'] == 'gr':
+                        costo_por_kilo = costo_unitario * 1000
+                        st.metric("Costo/gr", f"${costo_unitario:.2f}")
+                        st.caption(f"💰 Costo/kg: ${costo_por_kilo:,.2f}")
+                    else:
+                        st.metric("Costo/unidad", f"${costo_unitario:.2f}")
     else:
         st.info("No hay ingredientes. ¡Agregá el primero!")
 
