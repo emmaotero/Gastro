@@ -35,18 +35,18 @@ def aplicar_estilos():
         font-weight: 600;
     }
     
-    /* Cards con sombra - MEJORADO CON MEJOR CONTRASTE */
+    /* Cards con sombra - EXPANDERS MÁS OSCUROS */
     .stExpander {
-        background-color: #F5F5F5;
+        background-color: #BDBDBD;
         border-radius: 10px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         margin-bottom: 10px;
-        border: 1px solid #E0E0E0;
+        border: 1px solid #9E9E9E;
     }
     
     .stExpander summary {
-        background-color: #E8E8E8;
-        color: #1F1F1F !important;
+        background-color: #757575;
+        color: white !important;
         font-weight: 600;
         padding: 12px;
         border-radius: 8px;
