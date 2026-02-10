@@ -1367,7 +1367,8 @@ def mostrar_calculadora():
             st.metric("Precio Unitario", f"${precio_final:,.2f}")
         
         # Resultados del pedido
-        costo_total_pedido = costo_total * cantidad_pedido
+        costo_por_unidad = costo_total_produccion + (mano_obra_propia if tipo_mano_obra == "Propia (ganancia)" else 0)
+        costo_total_pedido = costo_por_unidad * cantidad_pedido
         ingreso_total_pedido = precio_final * cantidad_pedido
         ganancia_total_pedido = ingreso_total_pedido - costo_total_pedido
         
@@ -1382,7 +1383,12 @@ def mostrar_calculadora():
         with col3:
             st.metric("Ingreso Total", f"${ingreso_total_pedido:,.2f}")
         with col4:
-            st.metric("**Ganancia**", f"${ganancia_total_pedido:,.2f}", delta=f"{((ganancia_total_pedido/costo_total_pedido)*100):.1f}%")
+            if tipo_mano_obra == "Propia (ganancia)":
+                ganancia_neta_sin_tu_trabajo = ingreso_total_pedido - (costo_total_produccion * cantidad_pedido)
+                st.metric("**Ganancia Total**", f"${ganancia_neta_sin_tu_trabajo:,.2f}")
+                st.caption(f"Incluye tu trabajo: ${mano_obra_propia * cantidad_pedido:,.2f}")
+            else:
+                st.metric("**Ganancia**", f"${ganancia_total_pedido:,.2f}", delta=f"{((ganancia_total_pedido/costo_total_pedido)*100):.1f}%" if costo_total_pedido > 0 else "0%")
         
         # Botón para actualizar precio en el producto
         st.write("---")
@@ -1687,3 +1693,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
