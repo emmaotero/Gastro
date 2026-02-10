@@ -35,12 +35,32 @@ def aplicar_estilos():
         font-weight: 600;
     }
     
-    /* Cards con sombra */
+    /* Cards con sombra - MEJORADO CON MEJOR CONTRASTE */
     .stExpander {
-        background-color: white;
+        background-color: #F5F5F5;
         border-radius: 10px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         margin-bottom: 10px;
+        border: 1px solid #E0E0E0;
+    }
+    
+    .stExpander summary {
+        background-color: #E8E8E8;
+        color: #1F1F1F !important;
+        font-weight: 600;
+        padding: 12px;
+        border-radius: 8px;
+    }
+    
+    .stExpander[open] summary {
+        background-color: #FF6B6B;
+        color: white !important;
+        border-radius: 8px 8px 0 0;
+    }
+    
+    .stExpander summary:hover {
+        background-color: #FFA07A;
+        color: white !important;
     }
     
     /* Botones mejorados */
@@ -664,15 +684,33 @@ def mostrar_inventario():
     user_id = st.session_state.get('user_id')
     df = obtener_ingredientes(user_id)
     
-    # Botón exportar
+    # Botones de acción
     if not df.empty:
-        excel_file = exportar_a_excel(df, "Inventario")
-        st.download_button(
-            label="📥 Exportar a Excel",
-            data=excel_file,
-            file_name=f"inventario_{date.today()}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            excel_file = exportar_a_excel(df, "Inventario")
+            st.download_button(
+                label="📥 Exportar a Excel",
+                data=excel_file,
+                file_name=f"inventario_{date.today()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        
+        with col2:
+            # Botón para limpiar inventario
+            if st.button("🗑️ Limpiar Inventario Completo", type="secondary", key="limpiar_inventario"):
+                if st.session_state.get('confirmar_eliminar_inventario', False):
+                    try:
+                        supabase.table('ingredientes').delete().eq('user_id', user_id).execute()
+                        st.success("✅ Inventario eliminado")
+                        st.session_state['confirmar_eliminar_inventario'] = False
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+                else:
+                    st.session_state['confirmar_eliminar_inventario'] = True
+                    st.warning("⚠️ Apretá de nuevo para confirmar")
     
     # Agregar nuevo (formulario limpio después de submit)
     with st.expander("➕ Agregar Nuevo Ingrediente", expanded=False):
@@ -680,7 +718,7 @@ def mostrar_inventario():
             col1, col2 = st.columns(2)
             with col1:
                 nombre = st.text_input("Nombre*")
-                unidad = st.selectbox("Unidad*", ["gr", "kg", "un", "lata", "ml", "l"])
+                unidad = st.selectbox("Unidad*", ["gr", "un"])
             with col2:
                 stock = st.number_input("Stock inicial", min_value=0.0, value=0.0, step=0.1)
                 costo = st.number_input("Costo unitario", min_value=0.0, value=0.0, step=0.01)
@@ -1048,11 +1086,7 @@ def mostrar_productos():
                                     ing_data = supabase.table('ingredientes').select('costo_unitario, unidad').eq('user_id', user_id).eq('nombre', ing['ingrediente_nombre']).execute()
                                     if ing_data.data:
                                         costo_unitario = ing_data.data[0].get('costo_unitario', 0)
-                                        unidad_ing = ing_data.data[0].get('unidad', ing['unidad'])
-                                        
-                                        # Convertir si es necesario
-                                        cantidad_convertida = normalizar_unidad(ing['cantidad'], ing['unidad'], unidad_ing)
-                                        costo_total += cantidad_convertida * costo_unitario
+                                        costo_total += ing['cantidad'] * costo_unitario
                                 
                                 costo_total += producto.get('costo_embalaje', 0)
                                 precio_venta = producto.get('precio_venta', 0)
